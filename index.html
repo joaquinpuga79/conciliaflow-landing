@@ -511,6 +511,12 @@
             box-shadow: 0 10px 25px rgba(30, 64, 175, 0.3);
         }
 
+        .submit-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* Footer */
         footer {
             background: var(--text);
@@ -615,6 +621,20 @@
             animation: slideDown 0.3s ease-out;
         }
 
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
         @keyframes slideDown {
             from {
                 opacity: 0;
@@ -624,6 +644,23 @@
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+
+        .btn-loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -810,15 +847,15 @@
                 <div id="successMessage" class="success-message">
                     ✓ ¡Gracias! Hemos recibido tu solicitud. Nos pondremos en contacto pronto.
                 </div>
+
+                <div id="errorMessage" class="error-message">
+                    ✗ Hubo un error al enviar el formulario. Por favor, intenta nuevamente.
+                </div>
                 
-                <form id="earlyAccessForm" action="https://formsubmit.co/info@conciliaflow.store" method="POST">
-                    <input type="hidden" name="_subject" value="Nueva solicitud de acceso - ConciliaFlow">
-                    <input type="hidden" name="_captcha" value="false">
-                    <input type="hidden" name="_next" value="#form">
-                    
+                <form id="earlyAccessForm" action="https://n8n.srv1054811.hstgr.cloud/webhook/conciliaflow-leads" method="POST">
                     <div class="form-group">
                         <label for="name">Nombre completo *</label>
-                        <input type="text" id="name" name="name" required>
+                        <input type="text" id="name" name="nombre" required>
                     </div>
                     
                     <div class="form-group">
@@ -828,12 +865,12 @@
                     
                     <div class="form-group">
                         <label for="company">Empresa *</label>
-                        <input type="text" id="company" name="company" required>
+                        <input type="text" id="company" name="empresa" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="size">Tamaño de la empresa *</label>
-                        <select id="size" name="company_size" required>
+                        <select id="size" name="tamano" required>
                             <option value="">Selecciona una opción</option>
                             <option value="1-10">1-10 empleados</option>
                             <option value="11-50">11-50 empleados</option>
@@ -854,10 +891,15 @@
                     
                     <div class="form-group">
                         <label for="phone">Teléfono</label>
-                        <input type="tel" id="phone" name="phone">
+                        <input type="tel" id="phone" name="telefono">
                     </div>
                     
-                    <button type="submit" class="submit-button">Enviar Solicitud</button>
+                    <!-- Campo anti-spam (invisible) -->
+                    <input type="text" name="_honeypot" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" autocomplete="off">
+                    
+                    <button type="submit" class="submit-button" id="submitBtn">
+                        <span id="btnText">Enviar Solicitud</span>
+                    </button>
                 </form>
             </div>
         </div>
@@ -893,7 +935,7 @@
             <div class="footer-bottom">
                 <p>&copy; 2026 ConciliaFlow Solutions. Todos los derechos reservados.</p>
             </div>
-        </div>action="https://n8n.srv1054811.hstgr.cloud/webhook/conciliaflow-leads" method="POST">
+        </div>
     </footer>
 
     <script>
@@ -914,14 +956,59 @@
             document.getElementById('form').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Show success message after form submission
-        if (window.location.hash === '#form' && document.referrer.includes(window.location.hostname)) {
+        // Handle form submission with n8n
+        document.getElementById('earlyAccessForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
             const successMsg = document.getElementById('successMessage');
-            successMsg.classList.add('show');
-            setTimeout(() => {
-                successMsg.classList.remove('show');
-            }, 5000);
-        }
+            const errorMsg = document.getElementById('errorMessage');
+            
+            // Hide previous messages
+            successMsg.classList.remove('show');
+            errorMsg.classList.remove('show');
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            btnText.textContent = 'Enviando...';
+            submitBtn.classList.add('btn-loading');
+            
+            // Send data to n8n
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Success
+                    successMsg.classList.add('show');
+                    form.reset();
+                    
+                    // Scroll to success message
+                    successMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // Hide success message after 5 seconds
+                    setTimeout(() => {
+                        successMsg.classList.remove('show');
+                    }, 5000);
+                } else {
+                    // Error
+                    errorMsg.classList.add('show');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                errorMsg.classList.add('show');
+            })
+            .finally(() => {
+                // Re-enable button
+                submitBtn.disabled = false;
+                btnText.textContent = 'Enviar Solicitud';
+                submitBtn.classList.remove('btn-loading');
+            });
+        });
     </script>
 </body>
 </html>
